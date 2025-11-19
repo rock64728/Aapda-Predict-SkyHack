@@ -1,1 +1,6 @@
-streamlit, opencv-python-headless, pandas, altair, fpdf, streamlit-image-comparison
+streamlit
+opencv-python-headless
+pandas
+altair
+fpdf
+streamlit-image-comparison
