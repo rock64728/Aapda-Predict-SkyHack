@@ -50,7 +50,7 @@ Follow these steps to launch the Command Center on your machine:
 
 Clone the Repository
 
-git clone [https://github.com/](https://github.com/rock64728)/Aapda-Predict-SkyHack.git
+git clone [[https://github.com/](https://github.com/rock64728)/Aapda-Predict-SkyHack.git](https://github.com/rock64728/Aapda-Predict-SkyHack.git)
 cd Aapda-Predict-SkyHack
 
 
