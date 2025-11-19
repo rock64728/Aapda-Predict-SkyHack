@@ -9,7 +9,7 @@ from fpdf import FPDF
 import base64
 import time
 
-# --- PAGE CONFIG ---
+# Page Configuration
 st.set_page_config(
     page_title="Aapda-Predict | Strategic Command",
     layout="wide",
@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- PRO STYLING ---
+# Custom CSS
 st.markdown("""
 <style>
     .main { background-color: #0E1117; }
@@ -26,7 +26,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER FUNCTIONS ---
+# --- Utility Functions ---
+
 def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}.pdf">📄 Download Mission Report</a>'
@@ -35,18 +36,24 @@ def generate_pdf(area, risk, conf):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
+    
+    # Header
     pdf.cell(200, 10, txt="Aapda-Predict | Situation Report", ln=1, align="C")
     pdf.cell(200, 10, txt="------------------------------------------------", ln=1, align="C")
+    
+    # Body
     pdf.cell(200, 10, txt=f"Detected Impact Area: {area}", ln=1)
     pdf.cell(200, 10, txt=f"Risk Level: {risk}", ln=1)
     pdf.cell(200, 10, txt=f"AI Confidence: {conf}", ln=1)
     pdf.cell(200, 10, txt="Recommendation: Deploy SDRF to Sector 4 immediately.", ln=1)
+    
     return pdf.output(dest="S").encode("latin-1")
 
-# --- SIDEBAR ---
+# --- Sidebar Configuration ---
+
 st.sidebar.title("📡 Intelligence Feed")
 
-# Feature: Satellite Telemetry (The "Pro" Look)
+# Satellite Metadata
 with st.sidebar.expander("🛰️ Satellite Telemetry", expanded=True):
     st.write("**Platform:** Sentinel-1A (SAR)")
     st.write("**Mode:** Interferometric Wide (IW)")
@@ -56,52 +63,66 @@ with st.sidebar.expander("🛰️ Satellite Telemetry", expanded=True):
     st.caption("Signal Status: Locked 🟢")
 
 st.sidebar.markdown("---")
+
+# Control Panel
 threshold_val = st.sidebar.slider("🌊 Sensitivity Calibration", 0, 255, 55)
 view_layer = st.sidebar.radio("Overlay Type", ["🔴 Risk Boundaries", "🔥 Depth Heatmap"])
 
-# --- LOAD DATA ---
+# --- Data Loading ---
+
 try:
     img_cloudy_pil = Image.open("optical_cloudy.jpg")
     img_cv = cv2.imread("radar_clear.jpg")
+    
+    if img_cv is None:
+        st.error("System Error: Source imagery not found. Check storage.")
+        st.stop()
+        
     img_gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-except:
-    st.error("System Error: Source imagery not found. Check storage.")
+except Exception as e:
+    st.error(f"File Error: {e}")
     st.stop()
 
-# --- AI PIPELINE ---
-# 1. Denoise
+# --- Core Processing Pipeline ---
+
+# 1. Preprocessing (Denoise)
 img_gray = cv2.medianBlur(img_gray, 5)
 
-# 2. Segmentation
+# 2. Segmentation (Thresholding)
 _, mask = cv2.threshold(img_gray, threshold_val, 255, cv2.THRESH_BINARY_INV)
 
-# 3. Morphological Closing
+# 3. Post-processing (Morphological Closing)
 kernel = np.ones((3,3), np.uint8)
 mask_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-# 4. Depth Mapping
+# 4. Depth Estimation (Distance Transform)
 dist_transform = cv2.distanceTransform(mask_clean, cv2.DIST_L2, 5)
 cv2.normalize(dist_transform, dist_transform, 0, 1.0, cv2.NORM_MINMAX)
 
-# 5. Visuals
+# 5. Visualization Generation
 if view_layer == "🔴 Risk Boundaries":
     overlay = img_cv.copy()
-    overlay[mask_clean == 255] = [0, 0, 255] 
+    overlay[mask_clean == 255] = [0, 0, 255] # Red overlay
     alpha = 0.4
     final_vis = cv2.addWeighted(overlay, alpha, img_cv, 1 - alpha, 0)
 else:
+    # Apply Jet colormap for depth visualization
     heatmap = cv2.applyColorMap(np.uint8(dist_transform * 255), cv2.COLORMAP_JET)
     final_vis = img_cv.copy()
+    
+    # Mask heatmap to water areas only
     heatmap_masked = cv2.bitwise_and(heatmap, heatmap, mask=mask_clean)
     final_vis = cv2.addWeighted(heatmap_masked, 0.6, img_cv, 0.6, 0)
 
+# Convert to RGB for Streamlit display
 final_vis_rgb = cv2.cvtColor(final_vis, cv2.COLOR_BGR2RGB)
 
-# --- ANALYTICS ---
+# --- Metrics Calculation ---
 water_pixels = cv2.countNonZero(mask_clean)
 est_area = f"{int(water_pixels * 0.01)} sq km"
 
-# --- DASHBOARD ---
+# --- Main Dashboard Layout ---
+
 col1, col2 = st.columns([3, 1])
 
 with col1:
@@ -120,31 +141,33 @@ with col2:
     st.metric("Impact Zone", est_area, "Critical")
     st.metric("Est. Depth (Max)", "4.2 meters", "+0.3m")
     
-    # Feature 2: The Time-Series Graph (Altair)
     st.write("**12-Hour Flood Forecast**")
+    
+    # Time Series Data
     data = pd.DataFrame({
         'Time': ['Now', '+2h', '+4h', '+6h', '+8h', '+10h', '+12h'],
         'Water Level (m)': [3.5, 3.8, 4.1, 4.4, 4.2, 4.0, 3.9]
     })
     
-    # THE FIX: We add sort=None to the X axis to keep chronological order
+    # Chart Configuration
     chart = alt.Chart(data).mark_line(color='#FF4B4B').encode(
-        x=alt.X('Time', sort=None, axis=alt.Axis(labelAngle=0)), # sort=None fixes order, labelAngle=0 makes text horizontal
-        y=alt.Y('Water Level (m)', scale=alt.Scale(domain=[3, 5])) # Sets a fixed range so the line looks more dramatic
+        x=alt.X('Time', sort=None),
+        y=alt.Y('Water Level (m)', scale=alt.Scale(domain=[3, 5]))
     )
     st.altair_chart(chart, use_container_width=True)
     
     st.write("---")
     
-    # Feature: Download CSV
+    # Data Export
     csv_data = data.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Export Telemetry (CSV)", csv_data, "flood_data.csv", "text/csv")
 
+    # Report Generation
     if st.button("📄 Generate Mission Report"):
         html = create_download_link(generate_pdf(est_area, "HIGH", "98.2%"), "mission_report")
         st.markdown(html, unsafe_allow_html=True)
 
-# --- SYSTEM LOGS (The "Technical Density") ---
+# --- System Logs ---
 st.write("---")
 st.subheader("🖥️ System Event Log")
 st.code("""
